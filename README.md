@@ -29,6 +29,11 @@ Then open **http://localhost:4000** in your browser. The SQLite DB is created an
 > Node 22+ required (uses the built-in `node:sqlite` module). If you see a warning
 > `ExperimentalWarning: SQLite is an experimental feature`, that's expected and harmless.
 
+> **Self-healing DB:** on startup the server runs an idempotent migration + seed —
+> it adds any missing columns and any missing seeded templates/bookings to an
+> existing `data.sqlite` **without** overwriting your edits. So after pulling new
+> code you do **not** need to delete the database; just restart.
+
 ## The four tabs
 
 | Tab | What it shows |

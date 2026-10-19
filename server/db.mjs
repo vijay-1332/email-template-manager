@@ -74,15 +74,37 @@ export function initDb() {
       contact_email  TEXT
     );
   `);
+  migrate();
   seed();
   seedBookings();
 }
 
-function seed() {
-  const row = db.prepare('SELECT COUNT(*) AS c FROM email_templates').get();
-  if (row.c > 0) return;
+/**
+ * Lightweight, idempotent column migration for DBs created by an older version
+ * of this schema (before is_locked / editable_fields / etc. existed). Adds any
+ * missing columns so an existing data.sqlite keeps working without deletion.
+ */
+function migrate() {
+  const ensureColumn = (table, column, ddl) => {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+    if (!cols.some((c) => c.name === column)) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+      console.log(`[db] migrated: added ${table}.${column}`);
+    }
+  };
+  ensureColumn('email_templates', 'is_locked', 'is_locked INTEGER NOT NULL DEFAULT 0');
+  ensureColumn('email_templates', 'editable_fields', `editable_fields TEXT NOT NULL DEFAULT '["to","cc","bcc"]'`);
+  ensureColumn('email_templates', 'default_to', `default_to TEXT NOT NULL DEFAULT ''`);
+  ensureColumn('email_templates', 'default_cc', `default_cc TEXT NOT NULL DEFAULT ''`);
+  ensureColumn('sent_emails', 'cc_address', 'cc_address TEXT');
+}
 
+function seed() {
+  // Idempotent: insert only templates whose `key` is missing. This way a new
+  // seeded template (e.g. booking_instruction) is added to an EXISTING db on
+  // the next startup, without wiping the admin's edits to other templates.
   const now = new Date().toISOString();
+  const exists = db.prepare('SELECT 1 FROM email_templates WHERE key = ?');
   const insert = db.prepare(`
     INSERT INTO email_templates
       (id, key, name, category, subject, body_html, placeholders, is_active,
@@ -195,20 +217,22 @@ function seed() {
     },
   ];
 
+  let added = 0;
   for (const s of seeds) {
+    if (exists.get(s.key)) continue; // keep admin edits; only add missing keys
     insert.run(
       randomUUID(), s.key, s.name, s.category, s.subject, s.body_html,
       JSON.stringify(s.placeholders), s.is_locked, JSON.stringify(s.editable_fields),
       s.default_to, s.default_cc, now, now,
     );
+    added++;
   }
-  console.log(`[db] Seeded ${seeds.length} email templates (all locked).`);
+  if (added) console.log(`[db] Seeded ${added} missing email template(s).`);
 }
 
 function seedBookings() {
-  const row = db.prepare('SELECT COUNT(*) AS c FROM bookings').get();
-  if (row.c > 0) return;
-
+  // Idempotent: insert only bookings whose booking_no is missing.
+  const exists = db.prepare('SELECT 1 FROM bookings WHERE booking_no = ?');
   const insert = db.prepare(`
     INSERT INTO bookings (id, booking_no, booking_date, shipper, consignee, carrier, pol, pod, planning_type, contact_email)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -225,6 +249,11 @@ function seedBookings() {
     ['BKG/EXP/2026/0016', '29/09/2026', 'Testing Party Name 03', '—', 'Asian Diamonds', 'Jirva port - 0010', 'Gota port - 001', 'Forwarding', 'ops@asian.example'],
   ];
 
-  for (const b of bookings) insert.run(randomUUID(), ...b);
-  console.log(`[db] Seeded ${bookings.length} demo bookings.`);
+  let added = 0;
+  for (const b of bookings) {
+    if (exists.get(b[0])) continue; // b[0] is booking_no
+    insert.run(randomUUID(), ...b);
+    added++;
+  }
+  if (added) console.log(`[db] Seeded ${added} missing demo booking(s).`);
 }
