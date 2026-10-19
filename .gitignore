@@ -1,0 +1,15 @@
+# SQLite runtime DB (auto-created + seeded on first run)
+server/data.sqlite
+server/data.sqlite-shm
+server/data.sqlite-wal
+
+# Node
+node_modules/
+npm-debug.log*
+
+# OS
+.DS_Store
+
+# Editor/runtime noise
+*.log
+.kiro/

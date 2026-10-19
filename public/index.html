@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Email Template Manager</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">✉️</span>
+      <div>
+        <h1>Email Template Manager</h1>
+        <p class="subtitle">DB-driven templates · edited by Super Admin · zero code changes</p>
+      </div>
+    </div>
+    <div class="role">
+      <label>Role:</label>
+      <select id="roleSelect">
+        <option value="super_admin">super_admin</option>
+        <option value="viewer">viewer</option>
+      </select>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-view="list">📋 Templates</button>
+    <button class="tab" data-view="send">📤 Send Demo</button>
+    <button class="tab" data-view="log">🧾 Sent Log</button>
+  </nav>
+
+  <main id="app"></main>
+
+  <!-- Editor view template (hidden; cloned by JS) -->
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
