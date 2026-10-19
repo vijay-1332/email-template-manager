@@ -10,6 +10,7 @@ import { dirname, join, extname } from 'node:path';
 import { db, initDb } from './db.mjs';
 import { render, sanitize, findUnknownPlaceholders } from './templateEngine.mjs';
 import { sendTemplatedEmail, listSentEmails, TemplateNotFoundError } from './emailService.mjs';
+import { compose, sendFromRecord, listBookings, RecordNotFoundError } from './composeService.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, '..', 'public');
@@ -44,7 +45,12 @@ function isSuperAdmin(req) {
 }
 
 function rowToTemplate(row) {
-  return { ...row, placeholders: JSON.parse(row.placeholders || '[]') };
+  return {
+    ...row,
+    placeholders: JSON.parse(row.placeholders || '[]'),
+    editable_fields: JSON.parse(row.editable_fields || '[]'),
+    is_locked: !!row.is_locked,
+  };
 }
 
 function validatePayload(body) {
@@ -111,10 +117,12 @@ const server = http.createServer(async (req, res) => {
         const id = randomUUID();
         const user = req.headers['x-user-id'] ?? 'super_admin';
         db.prepare(
-          `INSERT INTO email_templates (id,key,name,category,subject,body_html,placeholders,is_active,created_by,updated_by,created_at,updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO email_templates (id,key,name,category,subject,body_html,placeholders,is_active,is_locked,editable_fields,default_to,default_cc,created_by,updated_by,created_at,updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         ).run(id, body.key, body.name, body.category ?? 'general', body.subject, sanitize(body.body_html),
-          JSON.stringify(body.placeholders ?? []), body.is_active === false ? 0 : 1, user, user, now, now);
+          JSON.stringify(body.placeholders ?? []), body.is_active === false ? 0 : 1,
+          body.is_locked ? 1 : 0, JSON.stringify(body.editable_fields ?? ['to', 'cc', 'bcc']),
+          body.default_to ?? '', body.default_cc ?? '', user, user, now, now);
         return sendJson(res, 201, rowToTemplate(db.prepare('SELECT * FROM email_templates WHERE id = ?').get(id)));
       }
 
@@ -159,9 +167,13 @@ const server = http.createServer(async (req, res) => {
           const vc = db.prepare('SELECT COUNT(*) AS c FROM email_template_versions WHERE template_id = ?').get(id);
           db.prepare(`INSERT INTO email_template_versions (id,template_id,version_no,subject,body_html,edited_by,created_at) VALUES (?,?,?,?,?,?,?)`)
             .run(randomUUID(), id, vc.c + 1, existing.subject, existing.body_html, user, now);
-          db.prepare(`UPDATE email_templates SET name=?,category=?,subject=?,body_html=?,placeholders=?,is_active=?,updated_by=?,updated_at=? WHERE id=?`)
+          db.prepare(`UPDATE email_templates SET name=?,category=?,subject=?,body_html=?,placeholders=?,is_active=?,is_locked=?,editable_fields=?,default_to=?,default_cc=?,updated_by=?,updated_at=? WHERE id=?`)
             .run(body.name ?? existing.name, body.category ?? existing.category, body.subject, sanitize(body.body_html),
-              JSON.stringify(body.placeholders ?? JSON.parse(existing.placeholders)), body.is_active === false ? 0 : 1, user, now, id);
+              JSON.stringify(body.placeholders ?? JSON.parse(existing.placeholders)), body.is_active === false ? 0 : 1,
+              body.is_locked === undefined ? existing.is_locked : (body.is_locked ? 1 : 0),
+              JSON.stringify(body.editable_fields ?? JSON.parse(existing.editable_fields || '[]')),
+              body.default_to ?? existing.default_to, body.default_cc ?? existing.default_cc,
+              user, now, id);
           return sendJson(res, 200, rowToTemplate(db.prepare('SELECT * FROM email_templates WHERE id = ?').get(id)));
         }
 
@@ -173,7 +185,44 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      // ---- send (demo) ----
+      // ---- bookings (demo module records) ----
+      if (path === '/api/bookings' && method === 'GET') {
+        return sendJson(res, 200, listBookings());
+      }
+
+      // ---- compose: prefill a locked email for a record (low friction) ----
+      // GET /api/compose?key=booking_instruction&recordId=<id or booking_no>
+      if (path === '/api/compose' && method === 'GET') {
+        const key = url.searchParams.get('key');
+        const recordId = url.searchParams.get('recordId');
+        if (!key || !recordId) return sendJson(res, 400, { error: 'key and recordId are required' });
+        try {
+          return sendJson(res, 200, compose(key, recordId));
+        } catch (e) {
+          if (e instanceof TemplateNotFoundError) return sendJson(res, 404, { error: e.message });
+          if (e instanceof RecordNotFoundError) return sendJson(res, 404, { error: e.message });
+          return sendJson(res, 500, { error: e instanceof Error ? e.message : 'Compose failed' });
+        }
+      }
+
+      // ---- send from a record using a LOCKED template (tamper-proof) ----
+      // POST /api/compose/send { key, recordId, to, cc, bcc, userNote }
+      if (path === '/api/compose/send' && method === 'POST') {
+        const body = await readBody(req);
+        if (!body.key || !body.recordId) return sendJson(res, 400, { error: 'key and recordId are required' });
+        try {
+          const result = await sendFromRecord(body.key, body.recordId, {
+            to: body.to, cc: body.cc, bcc: body.bcc, userNote: body.userNote,
+          });
+          return sendJson(res, 200, { ok: true, ...result });
+        } catch (e) {
+          if (e instanceof TemplateNotFoundError) return sendJson(res, 404, { error: e.message });
+          if (e instanceof RecordNotFoundError) return sendJson(res, 404, { error: e.message });
+          return sendJson(res, 500, { error: e instanceof Error ? e.message : 'Send failed' });
+        }
+      }
+
+      // ---- send (generic demo) ----
       if (path === '/api/send' && method === 'POST') {
         const body = await readBody(req);
         if (!body.key || !body.to) return sendJson(res, 400, { error: 'key and to are required' });

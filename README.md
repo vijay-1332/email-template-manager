@@ -29,13 +29,54 @@ Then open **http://localhost:4000** in your browser. The SQLite DB is created an
 > Node 22+ required (uses the built-in `node:sqlite` module). If you see a warning
 > `ExperimentalWarning: SQLite is an experimental feature`, that's expected and harmless.
 
-## The three tabs
+> **Self-healing DB:** on startup the server runs an idempotent migration + seed —
+> it adds any missing columns and any missing seeded templates/bookings to an
+> existing `data.sqlite` **without** overwriting your edits. So after pulling new
+> code you do **not** need to delete the database; just restart.
+
+## The four tabs
 
 | Tab | What it shows |
 |-----|---------------|
+| 🚢 **Booking Instruction** | A real-world module list (like your screenshots). Click the **✉️ mail icon** on a row to open the **low-friction Send Mail modal** — subject & body are auto-filled from the row and **locked**; the user only confirms recipients and may add an optional note. |
 | 📋 **Templates** | CRUD table. Click **Edit** to open the WYSIWYG + live preview. Switch the top-right **Role** to `viewer` to see the super-admin guard in action. |
 | 📤 **Send Demo** | Pick a template, fill placeholder values, hit Send. Shows the exact `sendTemplatedEmail(...)` call a developer would write. |
 | 🧾 **Sent Log** | Every email sent, with a **View** button to see the final rendered HTML. |
+
+## Low-friction locked-template flow (the Booking Instruction tab)
+
+The core idea: the user shouldn't re-type data the system already knows. Clicking ✉️ on a
+record does this:
+
+```
+Record row (system knows)     Locked template (Super Admin owns)     User (types almost nothing)
+  bookingNo, shipper,    +      subject + body with {{...}}      +     confirm To/CC
+  carrier, POL, POD...          (READ-ONLY to the user)                + optional note
+          │                              │                                    │
+          └──────────────► server renders subject + body ◄──────────────────┘
+                                         │
+                      prefilled, locked modal → user clicks Send
+```
+
+**How "fixed per module, not alterable by the user" is enforced:**
+
+- Templates have `is_locked` + an `editable_fields` allow-list (e.g. `["to","cc","bcc","userNote","attachments"]`).
+- Subject & body come back **read-only** (body shown in an iframe preview) — there's no editable textarea.
+- On send, the server **re-renders** subject/body from the locked template and **ignores any
+  subject/body the client sends**. Verified: a request with `subject:"HACKED"` still sends the
+  template's subject. The user can only influence allow-listed fields.
+
+**New endpoints:**
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/bookings` | the demo module's records |
+| `GET /api/compose?key=&recordId=` | prefilled, locked subject/body + editable-field config for a record |
+| `POST /api/compose/send` | tamper-proof send: re-renders from the locked template, honors only allow-listed fields |
+
+**Wiring a new module into this flow** = add a loader in `server/composeService.mjs`
+(`MODULE_SOURCES[key]`) that maps a record to the template's placeholders. No template code,
+and the end user still can't alter the content.
 
 ## Architecture
 

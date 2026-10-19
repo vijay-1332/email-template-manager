@@ -25,12 +25,16 @@
   </header>
 
   <nav class="tabs">
-    <button class="tab active" data-view="list">📋 Templates</button>
+    <button class="tab active" data-view="bookings">🚢 Booking Instruction</button>
+    <button class="tab" data-view="list">📋 Templates</button>
     <button class="tab" data-view="send">📤 Send Demo</button>
     <button class="tab" data-view="log">🧾 Sent Log</button>
   </nav>
 
   <main id="app"></main>
+
+  <!-- Compose modal mount -->
+  <div id="modalRoot"></div>
 
   <!-- Editor view template (hidden; cloned by JS) -->
   <script src="/app.js" type="module"></script>

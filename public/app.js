@@ -27,7 +27,7 @@ function toast(msg, isError = false) {
 }
 
 // ---------- routing ----------
-let view = 'list';
+let view = 'bookings';
 let editing = null; // template object or {} for new
 
 document.querySelectorAll('.tab').forEach((tab) => {
@@ -42,9 +42,178 @@ document.querySelectorAll('.tab').forEach((tab) => {
 
 function render() {
   if (editing !== null) return renderEditor();
+  if (view === 'bookings') return renderBookings();
   if (view === 'list') return renderList();
   if (view === 'send') return renderSend();
   if (view === 'log') return renderLog();
+}
+
+// ---------- Booking Instruction list (the real-world low-friction flow) ----------
+async function renderBookings() {
+  app.innerHTML = `<div class="empty">Loading bookings…</div>`;
+  let bookings;
+  try { bookings = await api('/api/bookings'); }
+  catch (e) { app.innerHTML = `<div class="empty">Error: ${e.message}</div>`; return; }
+
+  app.innerHTML = `
+    <div class="hint">
+      This is your module list. Click the <strong>✉️ mail icon</strong> on any row to send its
+      Booking Instruction email — subject &amp; body are <strong>auto-filled from the row</strong> and
+      <strong>locked</strong> (set by the Super Admin). The user barely types anything.
+    </div>
+    <h2 style="margin:0 0 14px;font-size:18px;">Booking Instruction (${bookings.length})</h2>
+    <table>
+      <thead><tr>
+        <th>Booking No</th><th>Date</th><th>Shipper</th><th>Carrier</th>
+        <th>POL</th><th>POD</th><th>Planning</th><th style="text-align:right">Actions</th>
+      </tr></thead>
+      <tbody>
+        ${bookings.map((b) => `
+          <tr>
+            <td><strong>${esc(b.booking_no)}</strong></td>
+            <td style="font-size:13px;color:#64748b;">${esc(b.booking_date)}</td>
+            <td>${esc(b.shipper)}</td>
+            <td>${esc(b.carrier || '—')}</td>
+            <td>${esc(b.pol || '—')}</td>
+            <td>${esc(b.pod || '—')}</td>
+            <td><span class="plan-chip ${b.planning_type === 'Clearing' ? 'plan-clearing' : 'plan-forwarding'}">${esc(b.planning_type || '')}</span></td>
+            <td>
+              <div class="act-icons">
+                <button class="act-icon" title="View">👁️</button>
+                <button class="act-icon" title="Edit">✏️</button>
+                <button class="act-icon mail" title="Send Mail" data-mail="${esc(b.id)}">✉️</button>
+                <button class="act-icon" title="Delete">🗑️</button>
+              </div>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+  app.querySelectorAll('[data-mail]').forEach((btn) =>
+    btn.addEventListener('click', () => openComposeModal('booking_instruction', btn.dataset.mail)));
+}
+
+// ---------- Low-friction compose modal (locked template) ----------
+async function openComposeModal(key, recordId) {
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `<div class="modal-overlay"><div class="modal"><div class="modal-body"><div class="empty">Preparing email…</div></div></div></div>`;
+
+  let c;
+  try { c = await api(`/api/compose?key=${encodeURIComponent(key)}&recordId=${encodeURIComponent(recordId)}`); }
+  catch (e) { toast(e.message, true); root.innerHTML = ''; return; }
+
+  const canEditField = (f) => c.editableFields.includes(f);
+  const allowNote = canEditField('userNote');
+
+  root.innerHTML = `
+    <div class="modal-overlay" id="overlay">
+      <div class="modal">
+        <div class="modal-head">
+          <div>
+            <h2>Send Mail <span class="lock-badge">🔒 ${esc(c.templateName)}</span></h2>
+            <p class="sub">Content is set by the template and filled from this record. You only confirm recipients${allowNote ? ' and may add a short note' : ''}.</p>
+          </div>
+          <button class="modal-close" id="closeModal">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="field">
+            <label>To *</label>
+            ${canEditField('to')
+              ? `<input id="m-to" value="${esc(c.to)}" placeholder="recipient@example.com, ops@example.com" />`
+              : `<div class="locked-box">${esc(c.to) || '(none)'}</div>`}
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="field">
+              <label>CC</label>
+              ${canEditField('cc') ? `<input id="m-cc" value="${esc(c.cc)}" />` : `<div class="locked-box">${esc(c.cc) || '—'}</div>`}
+            </div>
+            <div class="field">
+              <label>BCC</label>
+              ${canEditField('bcc') ? `<input id="m-bcc" value="${esc(c.bcc)}" />` : `<div class="locked-box">${esc(c.bcc) || '—'}</div>`}
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Subject <span class="readonly-hint">🔒 auto-generated, read-only</span></label>
+            <div class="locked-box">${esc(c.subject)}</div>
+          </div>
+
+          <div class="field">
+            <label>Body <span class="readonly-hint">🔒 locked template, read-only</span></label>
+            <div class="locked-preview"><iframe id="m-preview"></iframe></div>
+          </div>
+
+          ${allowNote ? `
+          <div class="field">
+            <label>✏️ Add a note (optional)</label>
+            <textarea id="m-note" rows="2" placeholder="e.g. Please expedite this shipment."></textarea>
+            <small>Inserted into the body at the template's fixed position.</small>
+          </div>` : ''}
+
+          ${c.attachments?.length ? `
+          <div class="field">
+            <label>Attachments</label>
+            ${c.attachments.map((a) => `<div class="attach-row">📎 ${esc(a.name)} <span class="attach-auto">auto</span> <span style="margin-left:auto;color:#64748b">${esc(a.size || '')}</span></div>`).join('')}
+            <small style="display:block;margin-top:6px;">Auto-attached by the module. (Extra uploads would go here in production.)</small>
+          </div>` : ''}
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-secondary" id="cancelModal">Cancel</button>
+          <button class="btn btn-primary" id="sendModal">📤 Send Mail</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('m-preview').srcdoc = c.bodyHtml;
+
+  const close = () => { root.innerHTML = ''; };
+  document.getElementById('closeModal').addEventListener('click', close);
+  document.getElementById('cancelModal').addEventListener('click', close);
+  document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') close(); });
+
+  // Live-update preview when the note changes (so the user sees where it lands).
+  if (allowNote) {
+    const noteEl = document.getElementById('m-note');
+    let t;
+    noteEl.addEventListener('input', () => {
+      clearTimeout(t);
+      // Visual-only: show where the note will land. The server is the source
+      // of truth and re-renders the note into the locked template on send.
+      t = setTimeout(() => {
+        document.getElementById('m-preview').srcdoc = injectNote(c.bodyHtml, noteEl.value);
+      }, 150);
+    });
+  }
+
+  document.getElementById('sendModal').addEventListener('click', async () => {
+    const payload = { key: c.templateKey, recordId };
+    if (canEditField('to')) payload.to = document.getElementById('m-to').value;
+    if (canEditField('cc')) payload.cc = document.getElementById('m-cc').value;
+    if (canEditField('bcc')) payload.bcc = document.getElementById('m-bcc')?.value;
+    if (allowNote) payload.userNote = document.getElementById('m-note').value;
+
+    const btn = document.getElementById('sendModal');
+    btn.disabled = true; btn.textContent = 'Sending…';
+    try {
+      const res = await api('/api/compose/send', { method: 'POST', body: JSON.stringify(payload) });
+      toast('Mail sent ✓');
+      close();
+    } catch (e) {
+      toast(e.message, true);
+      btn.disabled = false; btn.textContent = '📤 Send Mail';
+    }
+  });
+}
+
+// Inject the note into the rendered body preview at the empty {{userNote}} spot.
+// The server is the source of truth on send; this is only a visual preview.
+function injectNote(html, note) {
+  if (!note) return html;
+  const safe = note.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // The template puts the note inside a <p></p>; find the first empty paragraph
+  // after the table and fill it, else append before the sign-off.
+  if (html.includes('<p></p>')) return html.replace('<p></p>', `<p>${safe}</p>`);
+  return html.replace('<p>Regards,', `<p>${safe}</p><p>Regards,`);
 }
 
 // ---------- List view ----------

@@ -3,10 +3,12 @@
 // Ships a MOCK adapter so it runs with zero SMTP/API setup.
 
 class MockMailer {
-  async sendEmail({ from, to, subject, html }) {
+  async sendEmail({ from, to, cc, bcc, subject, html }) {
     console.log('\n──────── 📧 MOCK EMAIL SENT ────────');
     console.log('From   :', from);
     console.log('To     :', to);
+    if (cc) console.log('CC     :', cc);
+    if (bcc) console.log('BCC    :', bcc);
     console.log('Subject:', subject);
     console.log('HTML   :', String(html).slice(0, 160) + '…');
     console.log('────────────────────────────────────\n');

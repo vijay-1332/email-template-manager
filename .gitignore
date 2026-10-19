@@ -13,3 +13,6 @@ npm-debug.log*
 # Editor/runtime noise
 *.log
 .kiro/
+
+# distributable zip
+email-template-manager.zip
