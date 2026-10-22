@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Driver Account Master</title>
+<style>
+  :root {
+    --blue: #2563eb;
+    --blue-soft: #eff4ff;
+    --green: #16a34a;
+    --amber: #d97706;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --bg: #f8fafc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    font-size: 14px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+  /* breadcrumb + title */
+  .crumb { font-size: 11px; letter-spacing: .5px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+  .crumb b { color: var(--blue); }
+  .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  .head h1 { font-size: 22px; margin: 0; }
+
+  .btn {
+    border: none; border-radius: 8px; padding: 10px 16px; font-size: 13px;
+    font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-ghost { background: #fff; color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: #f3f4f6; }
+  .btn-sm { padding: 6px 10px; font-size: 12px; }
+
+  .card { background: #fff; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+
+  /* toolbar */
+  .toolbar { display: flex; gap: 12px; align-items: center; padding: 16px; flex-wrap: wrap; }
+  .search {
+    flex: 1; min-width: 240px; position: relative;
+  }
+  .search input {
+    width: 100%; padding: 10px 12px 10px 36px; border: 1px solid var(--border);
+    border-radius: 8px; font-size: 13px; background: #fafafa;
+  }
+  .search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+  select {
+    padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+    background: #fff; font-size: 13px; cursor: pointer;
+  }
+  .filter-chip {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer;
+    padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: #fff;
+  }
+  .filter-chip input { cursor: pointer; }
+
+  /* driver group header row */
+  .group { border-top: 1px solid var(--border); }
+  .group:first-of-type { border-top: none; }
+  .grow {
+    display: grid; grid-template-columns: 24px 1fr 180px 220px 14px;
+    align-items: center; gap: 12px; padding: 14px 16px; cursor: pointer; user-select: none;
+  }
+  .grow:hover { background: #fafafc; }
+  .chev { transition: transform .15s; color: var(--muted); }
+  .group.open .chev { transform: rotate(90deg); }
+  .driver-name { font-weight: 600; }
+  .driver-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .summary { font-size: 12px; color: var(--muted); }
+  .summary b { color: var(--text); }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600;
+    padding: 3px 9px; border-radius: 999px;
+  }
+  .badge-ok { background: #ecfdf5; color: var(--green); }
+  .badge-warn { background: #fffbeb; color: var(--amber); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* accounts panel */
+  .accounts { display: none; padding: 0 16px 16px 52px; }
+  .group.open .accounts { display: block; }
+
+  .acct {
+    display: grid; grid-template-columns: 130px 1fr 140px 150px 70px auto;
+    align-items: center; gap: 12px;
+    padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; margin-top: 10px;
+    background: #fff;
+  }
+  .acct.primary { border-color: #bfdbfe; background: var(--blue-soft); }
+  .acct-bank { font-weight: 600; }
+  .acct-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .acct-val { margin-top: 2px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  .primary-pick {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; color: var(--muted);
+  }
+  .primary-pick input { accent-color: var(--blue); cursor: pointer; width: 15px; height: 15px; }
+  .primary-tag { background: var(--blue); color: #fff; }
+
+  /* toggle */
+  .switch { position: relative; display: inline-block; width: 38px; height: 22px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; inset: 0; background: #cbd5e1; border-radius: 999px; transition: .2s; cursor: pointer; }
+  .slider::before { content: ""; position: absolute; height: 16px; width: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+  .switch input:checked + .slider { background: var(--blue); }
+  .switch input:checked + .slider::before { transform: translateX(16px); }
+
+  .acts { display: flex; gap: 4px; justify-content: flex-end; }
+  .icon-btn {
+    border: none; background: transparent; cursor: pointer; color: var(--muted);
+    padding: 6px; border-radius: 6px; line-height: 0;
+  }
+  .icon-btn:hover { background: #eef2ff; color: var(--blue); }
+  .icon-btn.danger:hover { background: #fef2f2; color: #dc2626; }
+
+  /* footer */
+  .foot { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+  .pager { display: flex; gap: 6px; align-items: center; }
+
+  /* drawer */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; }
+  .overlay.show { display: block; }
+  .drawer {
+    position: fixed; top: 0; right: 0; height: 100%; width: 400px; max-width: 90vw;
+    background: #fff; box-shadow: -4px 0 24px rgba(0,0,0,.12);
+    transform: translateX(100%); transition: transform .25s; padding: 22px; overflow-y: auto;
+  }
+  .drawer.show { transform: translateX(0); }
+  .drawer h2 { margin: 0 0 4px; font-size: 18px; }
+  .drawer .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--muted); }
+  .field input, .field select { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+  .drawer-actions { display: flex; gap: 10px; margin-top: 24px; }
+  .drawer-actions .btn { flex: 1; justify-content: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="crumb">Masters &rsaquo; Transport &amp; Fleet Masters &rsaquo; <b>Driver Account Master</b></div>
+  <div class="head">
+    <h1>Driver Account Master</h1>
+    <button class="btn btn-primary" onclick="openDrawer('add')">+ Add Driver Account</button>
+  </div>
+
+  <div class="card">
+    <!-- toolbar -->
+    <div class="toolbar">
+      <div class="search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="search" placeholder="Search by Driver Name, Vehicle No., or Account No…" oninput="render()" />
+      </div>
+      <select id="statusFilter" onchange="render()">
+        <option value="all">All Status</option>
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
+      <label class="filter-chip"><input type="checkbox" id="missingPrimary" onchange="render()" /> Missing primary only</label>
+    </div>
+
+    <!-- groups -->
+    <div id="groups"></div>
+
+    <!-- footer -->
+    <div class="foot">
+      <span id="count">Showing drivers</span>
+      <div class="pager">
+        <span>Rows per page</span>
+        <select><option>10</option><option>25</option><option>50</option></select>
+        <button class="btn btn-ghost btn-sm">Prev</button>
+        <button class="btn btn-primary btn-sm">Next</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- edit/add drawer -->
+<div class="overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer" onclick="event.stopPropagation()">
+  <h2 id="drawerTitle">Edit Bank Account</h2>
+  <div class="sub" id="drawerSub">Suresh Yadav · DRV-002</div>
+  <div class="field"><label>Bank Name</label><input id="f_bank" placeholder="e.g. State Bank of India" /></div>
+  <div class="field"><label>Account Number</label><input id="f_acct" class="mono" placeholder="Account number" /></div>
+  <div class="field"><label>Account Holder Name</label><input id="f_holder" placeholder="Holder name" /></div>
+  <div class="field"><label>Status</label>
+    <select id="f_status"><option value="active">Active</option><option value="inactive">Inactive</option></select>
+  </div>
+  <div class="field">
+    <label><input type="checkbox" id="f_primary" style="width:auto;margin-right:6px;" /> Set as primary account for this driver</label>
+  </div>
+  <div class="drawer-actions">
+    <button class="btn btn-ghost" onclick="closeDrawer()">Cancel</button>
+    <button class="btn btn-primary" onclick="saveDrawer()">Save</button>
+  </div>
+</div>
+
+<script>
+/* ---------- sample data: drivers -> accounts ---------- */
+let drivers = [
+  { id: 1, name: "Suresh Yadav", code: "DRV-002", vehicle: "GJ015522", accounts: [
+      { id: 101, bank: "Bank of Ahmedabad", acct: "4241", holder: "Surendra", active: true, primary: true },
+      { id: 102, bank: "Bank of Ahmedabad", acct: "4240", holder: "Surendra", active: true, primary: false },
+      { id: 103, bank: "Bank of Ahmedabad", acct: "6554", holder: "Surendra", active: true, primary: false },
+  ]},
+  { id: 2, name: "Sonu", code: "DRV-025", vehicle: "GJ01AB1239", accounts: [
+      { id: 201, bank: "gbfrtgytr", acct: "5454", holder: "fghgtfhgfh", active: true, primary: true },
+  ]},
+  { id: 3, name: "Rakesh Patel", code: "DRV-2026-018", vehicle: "—", accounts: [
+      { id: 301, bank: "SBI", acct: "4645", holder: "DHruvN", active: true, primary: true },
+  ]},
+  { id: 4, name: "Rajen", code: "RAJEN_000", vehicle: "GJ01ZZ9931", accounts: [
+      { id: 401, bank: "trtrt", acct: "4645", holder: "rtrt", active: false, primary: false },
+  ]},
+  { id: 5, name: "Test", code: "TEST234235", vehicle: "GJ015566", accounts: [
+      { id: 501, bank: "SBI", acct: "4249", holder: "Sachin", active: false, primary: true },
+  ]},
+  { id: 6, name: "Jaimin", code: "TEST", vehicle: "GJ00202", accounts: [
+      { id: 601, bank: "SBI", acct: "4241", holder: "DHruvN", active: true, primary: true },
+  ]},
+];
+
+const openGroups = new Set([3]); // Rakesh expanded by default for demo
+let editCtx = null;
+
+const mask = n => "•••••••" + n;
+
+function matches(driver, q) {
+  if (!q) return true;
+  q = q.toLowerCase();
+  if (driver.name.toLowerCase().includes(q)) return true;
+  if (driver.code.toLowerCase().includes(q)) return true;
+  if (driver.vehicle.toLowerCase().includes(q)) return true;
+  return driver.accounts.some(a => a.acct.toLowerCase().includes(q));
+}
+
+function render() {
+  const q = document.getElementById('search').value.trim();
+  const sf = document.getElementById('statusFilter').value;
+  const missingOnly = document.getElementById('missingPrimary').checked;
+  const host = document.getElementById('groups');
+  host.innerHTML = '';
+  let shown = 0;
+
+  drivers.forEach(d => {
+    if (!matches(d, q)) return;
+
+    let accts = d.accounts;
+    if (sf === 'active') accts = accts.filter(a => a.active);
+    if (sf === 'inactive') accts = accts.filter(a => !a.active);
+    if ((sf !== 'all') && accts.length === 0) return;
+
+    const primaryCount = d.accounts.filter(a => a.primary).length;
+    if (missingOnly && primaryCount === 1) return;
+
+    shown++;
+    const open = openGroups.has(d.id);
+    const warn = primaryCount !== 1;
+    const badge = warn
+      ? `<span class="badge badge-warn"><span class="dot"></span>${primaryCount} primary ⚠</span>`
+      : `<span class="badge badge-ok"><span class="dot"></span>1 primary</span>`;
+
+    const group = document.createElement('div');
+    group.className = 'group' + (open ? ' open' : '');
+
+    group.innerHTML = `
+      <div class="grow" onclick="toggle(${d.id})">
+        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="9 6 15 12 9 18"/></svg>
+        <div>
+          <div class="driver-name">${d.name}</div>
+          <div class="driver-sub">${d.code} · ${d.vehicle}</div>
+        </div>
+        <div class="summary"><b>${d.accounts.length}</b> account${d.accounts.length>1?'s':''}</div>
+        <div>${badge}</div>
+        <div></div>
+      </div>
+      <div class="accounts">
+        ${accts.map(a => acctRow(d, a)).join('')}
+        <div style="margin-top:12px;">
+          <button class="btn btn-ghost btn-sm" onclick="openDrawer('add', ${d.id})">+ Add account for ${d.name}</button>
+        </div>
+      </div>`;
+    host.appendChild(group);
+  });
+
+  document.getElementById('count').textContent =
+    `Showing ${shown} driver${shown!==1?'s':''} · ${drivers.reduce((s,d)=>s+d.accounts.length,0)} accounts total`;
+}
+
+function acctRow(d, a) {
+  return `
+    <div class="acct ${a.primary ? 'primary' : ''}">
+      <div>
+        <div class="acct-label">Account No</div>
+        <div class="acct-val mono">${mask(a.acct)}</div>
+      </div>
+      <div>
+        <div class="acct-label">Bank · Holder</div>
+        <div class="acct-val"><span class="acct-bank">${a.bank}</span> · ${a.holder}</div>
+      </div>
+      <div>
+        ${a.primary
+          ? `<span class="badge primary-tag"><span class="dot"></span>Primary</span>`
+          : `<label class="primary-pick"><input type="radio" name="prim_${d.id}" onclick="setPrimary(${d.id},${a.id})"> Set primary</label>`}
+      </div>
+      <div></div>
+      <div>
+        <label class="switch"><input type="checkbox" ${a.active?'checked':''} onchange="toggleActive(${d.id},${a.id},this)"><span class="slider"></span></label>
+      </div>
+      <div class="acts">
+        <button class="icon-btn" title="View">👁</button>
+        <button class="icon-btn" title="Edit" onclick="openDrawer('edit', ${d.id}, ${a.id})">✏️</button>
+        <button class="icon-btn danger" title="Delete" onclick="delAccount(${d.id},${a.id})">🗑️</button>
+      </div>
+    </div>`;
+}
+
+function toggle(id) {
+  openGroups.has(id) ? openGroups.delete(id) : openGroups.add(id);
+  render();
+}
+
+/* enforce: exactly one primary per driver */
+function setPrimary(did, aid) {
+  const d = drivers.find(x => x.id === did);
+  const target = d.accounts.find(a => a.id === aid);
+  if (!target.active) { alert("Can't make an inactive account primary. Activate it first."); render(); return; }
+  d.accounts.forEach(a => a.primary = (a.id === aid));
+  render();
+}
+
+function toggleActive(did, aid, el) {
+  const d = drivers.find(x => x.id === did);
+  const a = d.accounts.find(x => x.id === aid);
+  if (a.primary && a.active) {
+    alert("This is the primary account. Set another account as primary before deactivating it.");
+    el.checked = true; return;
+  }
+  a.active = el.checked;
+  render();
+}
+
+function delAccount(did, aid) {
+  const d = drivers.find(x => x.id === did);
+  const a = d.accounts.find(x => x.id === aid);
+  if (a.primary && d.accounts.length > 1) {
+    alert("Can't delete the primary account. Promote another account to primary first.");
+    return;
+  }
+  if (!confirm(`Delete account ${mask(a.acct)} for ${d.name}?`)) return;
+  d.accounts = d.accounts.filter(x => x.id !== aid);
+  render();
+}
+
+/* ---------- drawer ---------- */
+function openDrawer(mode, did, aid) {
+  editCtx = { mode, did, aid };
+  const d = did ? drivers.find(x => x.id === did) : null;
+  document.getElementById('drawerTitle').textContent = mode === 'add' ? 'Add Bank Account' : 'Edit Bank Account';
+  document.getElementById('drawerSub').textContent = d ? `${d.name} · ${d.code}` : 'New driver account';
+
+  let a = { bank:'', acct:'', holder:'', active:true, primary:false };
+  if (mode === 'edit') a = d.accounts.find(x => x.id === aid);
+  document.getElementById('f_bank').value = a.bank;
+  document.getElementById('f_acct').value = a.acct;
+  document.getElementById('f_holder').value = a.holder;
+  document.getElementById('f_status').value = a.active ? 'active' : 'inactive';
+  document.getElementById('f_primary').checked = a.primary;
+
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('drawer').classList.add('show');
+}
+
+function closeDrawer() {
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('drawer').classList.remove('show');
+}
+
+function saveDrawer() {
+  const bank = document.getElementById('f_bank').value.trim();
+  const acct = document.getElementById('f_acct').value.trim();
+  const holder = document.getElementById('f_holder').value.trim();
+  const active = document.getElementById('f_status').value === 'active';
+  const makePrimary = document.getElementById('f_primary').checked;
+  if (!bank || !acct || !holder) { alert('Bank, account number and holder are required.'); return; }
+
+  const { mode, did, aid } = editCtx;
+  const d = drivers.find(x => x.id === did) || drivers[0];
+
+  if (mode === 'edit') {
+    const a = d.accounts.find(x => x.id === aid);
+    Object.assign(a, { bank, acct, holder, active });
+    if (makePrimary && active) d.accounts.forEach(x => x.primary = (x.id === aid));
+  } else {
+    const newAcct = { id: Date.now(), bank, acct, holder, active, primary: false };
+    if (d.accounts.length === 0) newAcct.primary = true; // first account is auto-primary
+    d.accounts.push(newAcct);
+    if (makePrimary && active) d.accounts.forEach(x => x.primary = (x.id === newAcct.id));
+    openGroups.add(d.id);
+  }
+  closeDrawer();
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
